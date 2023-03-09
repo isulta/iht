@@ -102,7 +102,7 @@ def find_Rvir_SO(part, posC=None, halo=None, snapnum=None):
     r = r[idx]
     Volume = 4/3 * np.pi * r**3 # Volume in units (physical kpc)^3
 
-    Masses = np.cumsum(Masses) * 1.e10 # Total mass in units Msun within sphere of radius r
+    Masses = np.cumsum(Masses, dtype=np.float64) * 1.e10 # Total mass in units Msun within sphere of radius r
 
     with np.errstate(divide='ignore'): Density = Masses/Volume * 1.e9 # Density in units Msun/Mpc^3
 
