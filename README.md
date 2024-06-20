@@ -16,7 +16,7 @@ replacing \<PATH TO IHT\> with the correct path.
 
 ### Halo Centering
 
-    from iht import halo_center_wrapper
+    from iht.iht import halo_center_wrapper
     posC = halo_center_wrapper(pdata)
 
 `pdata` should be a dictionary that contains the particle data (coordinates and masses), where `pdata['Coordinates']` is an Nx3 array of the (x,y,z) coordinates of each of the N particles, and `pdata['Masses']` is a 1D array of length N with the particle masses.
@@ -27,7 +27,7 @@ replacing \<PATH TO IHT\> with the correct path.
 
 ### Virial Radius and Virial Mass
 
-    from iht import find_Rvir_SO
+    from iht.iht import find_Rvir_SO
     Rvir, Mvir = find_Rvir_SO(part, posC)
 
 `part` is a *dictionary of dictionaries* containing all of the particle data at a snapshot, i.e. the keys of `part` are integers $\in \{ 0,1,2,4,5 \}$ specifying the particle type (see FIRE Wiki); the values are dictionaries of the form `{'Coordinates':Nx3 array, 'Masses': 1D array of length N}`. 

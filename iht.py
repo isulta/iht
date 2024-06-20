@@ -127,6 +127,77 @@ def find_Rvir_SO(part, posC=None, halo=None, snapnum=None):
     return r[idx_vir], Masses[idx_vir] # return Rvir in units physical kpc, and Mvir in units Msun
     # simple linear interpolation with next closest point, and InterpolatedUnivariateSpline.roots() both seem to return approximately same Rvir as the 1 point method above.
 
+# '''Finds velocity of the halo's center of mass, defined as mass-weighted average velocity of ALL particles within r < Rmax*Rvir.
+# '''
+# def velocity_COM(part, Rmax=1):
+#     # Get COM's (r/Rvir<Rmax) velocity 
+#     pall = {}
+#     pall['Masses'] = np.concatenate([part[k]['Masses'] for k in part.keys()])
+#     pall['Velocities'] = np.concatenate([part[k]['Velocities'] for k in part.keys()])
+#     pall['r_scaled'] = np.concatenate([part[k]['r_scaled'] for k in part.keys()])
+
+#     maskall = pall['r_scaled']<Rmax
+#     velC = np.sum( (pall['Velocities'].T * pall['Masses']).T[maskall], axis=0 ) / np.sum( pall['Masses'][maskall] )
+#     return velC
+
+def inrange(a, ra, right_bound_inclusive=True):
+    a1, a2 = ra
+    if right_bound_inclusive:
+        return (a1 <= a)&(a <= a2)
+    else:
+        return (a1 <= a)&(a < a2)
+
+def continuous_mode(data, bins=100, range=None):
+    # Create a histogram
+    hist, bin_edges = np.histogram(data, bins=bins, range=range)
+    
+    # Find the bin with the highest frequency (mode)
+    mode_index = np.argmax(hist)
+    
+    # The mode value will be the midpoint of the mode bin
+    mode = (bin_edges[mode_index] + bin_edges[mode_index + 1]) / 2
+    
+    return mode
+
+def find_virial_branch_particles( r_scaled, Temperature, nH, Masses, rbins=np.power(10, np.arange(np.log10(0.005258639741921723), np.log10(3), 0.05)), mainBranchHalfWidth=0.5, fbranchcut=0.5 ):
+    '''Selects all gas particles in the main, virial branch of the halo. Returns a 1D array of particle indices.
+
+    `r_scaled` is 1D array of the radial coordinate of each particle (distance relative to halo center), in units of the virial radius.
+    `Temperature` is 1D array of particle temperatures, in units K.
+    `nH` is 1D array of particle hydrogen number densities, in units cm^-3.
+    `Masses` is 1D array of particle masses.
+
+    `mainBranchHalfWidth` is half of the width (in log space) of the virial branch.
+    
+    Radial shells for which the mass fraction of particles in the virial branch is less than `fbranchcut` are excluded.
+    
+    Default `rbins` chosen to match Stern+20 Fig. 6: `np.power(10, np.arange(np.log10(0.005258639741921723), np.log10(1.9597976388995666), 0.05))`
+    '''
+    rmid = (rbins[:-1]+rbins[1:])/2 #midpoint of radial shells, in units of Rvir
+    Tmask = (Temperature > 10**5.0) #exclude particles with T <= 1e5 K from mode calculation
+
+    idx_virial_allbins = []
+
+    for r0,r1 in zip(rbins[:-1],rbins[1:]):
+        rmask = inrange( r_scaled, (r0, r1) )
+        Mshell = np.sum(Masses[rmask]) #mass of all particles in shell
+
+        idx = np.flatnonzero(Tmask & rmask)
+        T_mode = continuous_mode(np.log10(Temperature[idx]), range=(3,8)) #log space
+        nH_mode = continuous_mode(np.log10(nH[idx]), range=(-7,0)) #log space
+
+        idx_virial = np.flatnonzero(rmask&
+                                inrange( np.log10(Temperature), (T_mode - mainBranchHalfWidth, T_mode + mainBranchHalfWidth) )&
+                                inrange( np.log10(nH), (nH_mode - mainBranchHalfWidth, nH_mode + mainBranchHalfWidth) ))
+        
+        Mshell_virial = np.sum(Masses[idx_virial]) #mass of particles in shell belonging to virial branch
+        fbranch = Mshell_virial / Mshell #mass fraction of virial branch relative to all particles in shell
+
+        if fbranch >= fbranchcut:
+            idx_virial_allbins.append(idx_virial)
+    
+    return np.concatenate(idx_virial_allbins)
+
 ### COSMOLOGY CODE ###
 def scale_factor_to_redshift(a):
     z = 1/a - 1
