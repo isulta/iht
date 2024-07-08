@@ -198,6 +198,62 @@ def find_virial_branch_particles( r_scaled, Temperature, nH, Masses, rbins=np.po
     
     return np.concatenate(idx_virial_allbins)
 
+def find_angmom_vector(pos, vel, mass, normalize=True):
+    angmom = np.sum( np.cross(pos, vel) * mass[:, None], axis=0 )
+    if normalize: angmom /= np.linalg.norm(angmom)
+    return angmom
+
+def Rmatrix(u, theta):
+    c = np.cos(theta)
+    s = np.sin(theta)
+    ux, uy, uz = u
+    
+    R= [
+        [c+ux**2*(1-c), ux*uy*(1-c)-uz*s, ux*uz*(1-c)+uy*s],
+        [uy*ux*(1-c)+uz*s, c+uy**2*(1-c), uy*uz*(1-c)-ux*s],
+        [uz*ux*(1-c)-uy*s, uz*uy*(1-c)+ux*s, c+uz**2*(1-c)]
+    ]
+    return np.array(R)
+
+def rotate_coords(pdata, Rvirial, Rgal=0.1):
+    '''Given dictionary of particles, rotates coordinates and velocities such that the new z-axis is the axis of rotation of the galaxy.
+    `pdata[k]['Coordinates']` and `pdata[k]['Velocities']` are changed to be the new rotated coordinates.
+    
+    `pdata[k]['Coordinates']` and `pdata[k]['Velocities']` must be defined relative to the center of halo before calling this function.
+    
+    The axis of rotation of the galaxy is calculated as the total angular momentum of all star particles (`pdata[4]`) within `Rgal`*`Rvirial`.
+    `Rvirial` must have the same units as `pdata[k]['Coordinates']`.
+    '''
+    # Net angular momentum vector of all star particles within Rgal*Rvirial
+    idx = np.linalg.norm(pdata[4]['Coordinates'], axis=1) < (Rgal*Rvirial)
+    j = find_angmom_vector(pdata[4]['Coordinates'][idx], pdata[4]['Velocities'][idx], pdata[4]['Masses'][idx])
+    
+    u = np.cross([0,0,1], j)
+    u /= np.linalg.norm(u)
+    theta = np.arccos(j[2])
+    R = Rmatrix(u, theta)
+    
+    for k in pdata.keys():
+        pdata[k]['Coordinates'] = np.dot(pdata[k]['Coordinates'], R.T)
+        pdata[k]['Velocities'] = np.dot(pdata[k]['Velocities'], R.T)
+
+def spherical_velocities(v, r):
+    '''Given velocity v and position r cartesian arrays, calculates vrad, vtheta, vphi (each in same units as v).
+    For N particles, v is Nx3 array of cartestian particle velocities, and r is a Nx3 array of carestian particle positions.
+    `v` and `r` must be defined relative to the center of halo before calling this function.
+    '''
+    theta = np.arctan2( np.sqrt(r[:,0]**2 + r[:,1]**2), r[:,2] )
+    phi = np.arctan2( r[:,1], r[:,0] )
+    rhat = np.column_stack((np.sin(theta)*np.cos(phi), np.sin(theta)*np.sin(phi), np.cos(theta)))
+    thetahat = np.column_stack((np.cos(theta)*np.cos(phi), np.cos(theta)*np.sin(phi), -np.sin(theta)))
+    phihat = np.column_stack((-np.sin(phi), np.cos(phi), np.zeros_like(phi)))
+    
+    vrad = np.sum(v*rhat, axis=1)
+    vtheta = np.sum(v*thetahat, axis=1)
+    vphi = np.sum(v*phihat, axis=1)
+    
+    return vrad, vtheta, vphi
+
 ### COSMOLOGY CODE ###
 def scale_factor_to_redshift(a):
     z = 1/a - 1
