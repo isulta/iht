@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from numba import njit
+from scipy.spatial.transform import Rotation as R
 
 ### Halo centering ###
 def center_of_mass(coords, masses):
@@ -127,18 +128,18 @@ def find_Rvir_SO(part, posC=None, halo=None, snapnum=None):
     return r[idx_vir], Masses[idx_vir] # return Rvir in units physical kpc, and Mvir in units Msun
     # simple linear interpolation with next closest point, and InterpolatedUnivariateSpline.roots() both seem to return approximately same Rvir as the 1 point method above.
 
-# '''Finds velocity of the halo's center of mass, defined as mass-weighted average velocity of ALL particles within r < Rmax*Rvir.
-# '''
-# def velocity_COM(part, Rmax=1):
-#     # Get COM's (r/Rvir<Rmax) velocity 
-#     pall = {}
-#     pall['Masses'] = np.concatenate([part[k]['Masses'] for k in part.keys()])
-#     pall['Velocities'] = np.concatenate([part[k]['Velocities'] for k in part.keys()])
-#     pall['r_scaled'] = np.concatenate([part[k]['r_scaled'] for k in part.keys()])
+'''Finds velocity of the halo's center of mass, defined as mass-weighted average velocity of ALL particles within r < Rmax*Rvir.
+'''
+def velocity_COM(part, Rmax=1):
+    # Get COM's (r/Rvir<Rmax) velocity 
+    pall = {}
+    pall['Masses'] = np.concatenate([part[k]['Masses'] for k in part.keys()])
+    pall['Velocities'] = np.concatenate([part[k]['Velocities'] for k in part.keys()])
+    pall['r_scaled'] = np.concatenate([part[k]['r_scaled'] for k in part.keys()])
 
-#     maskall = pall['r_scaled']<Rmax
-#     velC = np.sum( (pall['Velocities'].T * pall['Masses']).T[maskall], axis=0 ) / np.sum( pall['Masses'][maskall] )
-#     return velC
+    maskall = pall['r_scaled']<Rmax
+    velC = np.sum( (pall['Velocities'].T * pall['Masses']).T[maskall], axis=0 ) / np.sum( pall['Masses'][maskall] )
+    return velC
 
 def inrange(a, ra, right_bound_inclusive=True):
     a1, a2 = ra
@@ -203,18 +204,6 @@ def find_angmom_vector(pos, vel, mass, normalize=True):
     if normalize: angmom /= np.linalg.norm(angmom)
     return angmom
 
-def Rmatrix(u, theta):
-    c = np.cos(theta)
-    s = np.sin(theta)
-    ux, uy, uz = u
-    
-    R= [
-        [c+ux**2*(1-c), ux*uy*(1-c)-uz*s, ux*uz*(1-c)+uy*s],
-        [uy*ux*(1-c)+uz*s, c+uy**2*(1-c), uy*uz*(1-c)-ux*s],
-        [uz*ux*(1-c)-uy*s, uz*uy*(1-c)+ux*s, c+uz**2*(1-c)]
-    ]
-    return np.array(R)
-
 def rotate_coords(pdata, Rvirial, Rgal=0.1):
     '''Given dictionary of particles, rotates coordinates and velocities such that the new z-axis is the axis of rotation of the galaxy.
     `pdata[k]['Coordinates']` and `pdata[k]['Velocities']` are changed to be the new rotated coordinates.
@@ -228,14 +217,17 @@ def rotate_coords(pdata, Rvirial, Rgal=0.1):
     idx = np.linalg.norm(pdata[4]['Coordinates'], axis=1) < (Rgal*Rvirial)
     j = find_angmom_vector(pdata[4]['Coordinates'][idx], pdata[4]['Velocities'][idx], pdata[4]['Masses'][idx])
     
-    u = np.cross([0,0,1], j)
+    u = np.cross(j, [0,0,1])
+    if np.linalg.norm(u) == 0: return # j is already aligned with z-axis
+    
     u /= np.linalg.norm(u)
-    theta = np.arccos(j[2])
-    R = Rmatrix(u, theta)
+    theta = np.arccos(j[2] / np.linalg.norm(j))
+    
+    r = R.from_rotvec(theta * u)
     
     for k in pdata.keys():
-        pdata[k]['Coordinates'] = np.dot(pdata[k]['Coordinates'], R.T)
-        pdata[k]['Velocities'] = np.dot(pdata[k]['Velocities'], R.T)
+        pdata[k]['Coordinates'] = r.apply(pdata[k]['Coordinates'])
+        pdata[k]['Velocities'] = r.apply(pdata[k]['Velocities'])
 
 def spherical_velocities(v, r):
     '''Given velocity v and position r cartesian arrays, calculates vrad, vtheta, vphi (each in same units as v).
