@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from numba import njit
 from scipy.spatial.transform import Rotation as R
+from astropy import units as un, constants as cons
 
 ### Halo centering ###
 def center_of_mass(coords, masses):
@@ -245,6 +246,38 @@ def spherical_velocities(v, r):
     vphi = np.sum(v*phihat, axis=1)
     
     return vrad, vtheta, vphi
+
+def luminosities(part, Zbins=1000):
+    """Calculates particle luminosities, in units erg/s.
+
+    `part` is a dictionary of gas particles:
+        `part['nH']` is hydrogen number density in units cm^-3.
+        `part['Temperature']` is temperature in units K.
+        `part['Metallicity']` is the mass fraction of metals; this is the prop('massfraction.metals') field in gizmo_analysis.
+        `part['Volume']` is particle volume in units physical kpc^3.
+        `part['Redshift']` is the redshift of the snapshot.
+
+    This function requires the cooling flow package by Stern et al. https://sites.northwestern.edu/jonathanstern/the-cooling_flow-package/
+    Make sure to set the `dataDir` variable in `WiersmaCooling.py` to the correct path of the cooling/ subfolder, 
+    e.g. `dataDir = '/home/ias627/tools/cooling_flow/cooling/'`
+
+    Cooling rates are calculated using the Wiersma et al. 2009 cooling tables (with Z=mean Z in 1000 metallicity bins).
+    """
+
+    import WiersmaCooling as Cool
+    Zsun = 0.0142 #Asplund+09
+    Zidxsplit = np.array_split( np.argsort(part['Metallicity']/Zsun), Zbins )
+    CoolingRate = np.zeros_like(part['nH']) #cooling rate in erg/s/cm^3
+
+    for Zidx in Zidxsplit:
+        Z2Zsun = np.mean(part['Metallicity'][Zidx]) / Zsun
+        cooling = Cool.Wiersma_Cooling(Z2Zsun, part['Redshift'])
+        CoolingRate_pred = cooling.LAMBDA(part['Temperature'][Zidx]*un.K, part['nH'][Zidx]*(un.cm**-3)) * (part['nH'][Zidx]*(un.cm**-3))**2
+        CoolingRate[Zidx] = CoolingRate_pred.to(un.erg/un.s*un.cm**-3).value
+
+    Luminosity = CoolingRate * part['Volume']
+    Luminosity = (Luminosity * un.erg/un.s*un.cm**-3 * un.kpc**3).to(un.erg/un.s).value
+    return Luminosity
 
 ### COSMOLOGY CODE ###
 def scale_factor_to_redshift(a):
