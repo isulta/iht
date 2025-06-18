@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from numba import njit
-from scipy.spatial.transform import Rotation as R
+from scipy.spatial.transform import Rotation
 from astropy import units as un, constants as cons
 
 ### Halo centering ###
@@ -205,7 +205,7 @@ def find_angmom_vector(pos, vel, mass, normalize=True):
     if normalize: angmom /= np.linalg.norm(angmom)
     return angmom
 
-def rotate_coords(pdata, Rvirial, Rgal=0.1):
+def rotate_coords(pdata, Rvirial, Rgal=0.1, rot=None):
     '''Given dictionary of particles, rotates coordinates and velocities such that the new z-axis is the axis of rotation of the galaxy.
     `pdata[k]['Coordinates']` and `pdata[k]['Velocities']` are changed to be the new rotated coordinates.
     
@@ -213,22 +213,29 @@ def rotate_coords(pdata, Rvirial, Rgal=0.1):
     
     The axis of rotation of the galaxy is calculated as the total angular momentum of all star particles (`pdata[4]`) within `Rgal`*`Rvirial`.
     `Rvirial` must have the same units as `pdata[k]['Coordinates']`.
+
+    Returns the rotation object. If rotation object `rot` is passed then it is used instead for the rotation.
     '''
-    # Net angular momentum vector of all star particles within Rgal*Rvirial
-    idx = np.linalg.norm(pdata[4]['Coordinates'], axis=1) < (Rgal*Rvirial)
-    j = find_angmom_vector(pdata[4]['Coordinates'][idx], pdata[4]['Velocities'][idx], pdata[4]['Masses'][idx])
-    
-    u = np.cross(j, [0,0,1])
-    if np.linalg.norm(u) == 0: return # j is already aligned with z-axis
-    
-    u /= np.linalg.norm(u)
-    theta = np.arccos(j[2] / np.linalg.norm(j))
-    
-    r = R.from_rotvec(theta * u)
+    if rot is None:
+        # Net angular momentum vector of all star particles within Rgal*Rvirial
+        idx = np.linalg.norm(pdata[4]['Coordinates'], axis=1) < (Rgal*Rvirial)
+        j = find_angmom_vector(pdata[4]['Coordinates'][idx], pdata[4]['Velocities'][idx], pdata[4]['Masses'][idx])
+        # idx = np.linalg.norm(pdata[0]['Coordinates'], axis=1) < (0.05*Rvirial) #TODO revert to star AM
+        # j = find_angmom_vector(pdata[0]['Coordinates'][idx], pdata[0]['Velocities'][idx], pdata[0]['Masses'][idx])
+        
+        u = np.cross(j, [0,0,1])
+        if np.linalg.norm(u) == 0: return # j is already aligned with z-axis
+        
+        u /= np.linalg.norm(u)
+        theta = np.arccos(j[2] / np.linalg.norm(j))
+        
+        rot = Rotation.from_rotvec(theta * u)
     
     for k in pdata.keys():
-        pdata[k]['Coordinates'] = r.apply(pdata[k]['Coordinates'])
-        pdata[k]['Velocities'] = r.apply(pdata[k]['Velocities'])
+        pdata[k]['Coordinates'] = rot.apply(pdata[k]['Coordinates'])
+        pdata[k]['Velocities'] = rot.apply(pdata[k]['Velocities'])
+    
+    return rot
 
 def spherical_velocities(v, r):
     '''Given velocity v and position r cartesian arrays, calculates vrad, vtheta, vphi (each in same units as v).
