@@ -286,6 +286,16 @@ def luminosities(part, Zbins=1000):
     Luminosity = (Luminosity * un.erg/un.s*un.cm**-3 * un.kpc**3).to(un.erg/un.s).value
     return Luminosity
 
+def internal_energy(part):
+    """Calculates internal energy of particles in a monatomic ideal gas, in units of ergs.
+
+    `part` is a dictionary of gas particles:
+        `part['Pressure']` is pressure in units Pa.
+        `part['Volume']` is particle volume in units physical kpc^3.
+    """
+
+    return 3/2 * part['Pressure'] * part['Volume'] * (un.Pa*un.kpc**3).to(un.erg)# convert to ergs
+
 ### COSMOLOGY CODE ###
 def scale_factor_to_redshift(a):
     z = 1/a - 1
