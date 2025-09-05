@@ -21,6 +21,11 @@ class Potential_FIRE():
         lnvcr = np.gradient(np.log(vcr), np.log(Mr['r']))
         self.lnvc_interp = interp1d(Mr['r'], lnvcr)
 
+        # Specific energy of circular orbit
+        Ecircr = (vcr**2/2 + Phir)*(cons.G*un.Msun/un.kpc).to((un.km/un.s)**2).value # (km/s)^2
+        self.Ecirc_interp = interp1d(Mr['r'], Ecircr, fill_value='extrapolate')
+        self.rcirc_interp = interp1d(Ecircr, Mr['r'], fill_value='extrapolate')
+
     def vc(self, r):
         r = r.to(un.kpc).value
         return ( self.vc_interp(r) * (cons.G*un.Msun/un.kpc)**0.5 ).to(un.km/un.s)
@@ -30,6 +35,12 @@ class Potential_FIRE():
     def dlnvc_dlnR(self, r):
         r = r.to(un.kpc).value
         return self.lnvc_interp(r)
+    def Ecirc(self, r):
+        r = r.to(un.kpc).value
+        return self.Ecirc_interp(r) * (un.km/un.s)**2
+    def rcirc(self, E):
+        E = E.to((un.km/un.s)**2).value
+        return self.rcirc_interp(E) * un.kpc
 
 def calculateMr(part, Rmin=None, Rmax=None, bins=100):
     '''Calculate the cumulative mass profile M(<r) for a given set of particles.'''

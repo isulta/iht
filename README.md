@@ -55,6 +55,10 @@ The units of `'Coordinates'` should be in physical kpc, and `'Masses'` should be
 Once a `Potential_FIRE` instance is initialized, the potential $\Phi(r)$, circular velocity $v_c(r)$, and slope of the $v_c$ profile, $\mathrm{d}(\ln v_c)/\mathrm{d}(\ln r)$, can be calculated at a given radius $r$ using the `potential.Phi`, `potential.vc`, and `potential.dlnvc_dlnR` methods.
 The methods accept one argument `r`, which must be a scalar or array *with units*, e.g. `200*units.kpc` or `np.arange(100,1000,100)*units.kpc`.
 
+There are also functions to calculate properties of circular orbits:
+* `potential.Ecirc(r)` returns the specific energy of a circular orbit at radius $r$
+* `potential.rcirc(E)` returns the radius of a circular orbit with specific energy $E$
+
 ### Radiative cooling luminosity
 
     from iht.iht import luminosities
